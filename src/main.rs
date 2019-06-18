@@ -4,7 +4,9 @@ use tokio::prelude::*;
 use tokio::codec;
 use futures::future;
 
+// @TODO generate a single &[u8] with many responses
 const SINGLE_RESP: &[u8] = b"HTTP/1.1 200 OK\r\nConnection: Keep-Alive\r\nContent-Length: 17\r\n\r\n{\"success\":true}\n";
+const RESPONSES: &[u8] = include_bytes!("./responses");
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
@@ -18,23 +20,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (reader, mut writer) = socket.split();
             let task = codec::FramedRead::new(reader, codec::BytesCodec::new())
                 .for_each(move |bytes| {
-                    // @TODO proper parsing here
-                    let n = bytes.len() / 32;
-                    // @TODO remove unwrap
-                    let resp = (0..n)
-                            .map(|_| SINGLE_RESP)
-                            .flatten()
-                            .cloned()
-                            .collect::<Vec<u8>>();
-                    writer.write(&resp);
-                    //writer.write(&many_resps[0..n*SINGLE_RESP.len()]).unwrap();
+                    // @TODO get rid of the unwrap; and handle out of bounds here
+                    writer.write(&RESPONSES[0..(bytes.len()/32)*SINGLE_RESP.len()]).unwrap();
                     future::ok(())
                 });
             
-            tokio::spawn(task
-                // @TODO: handle errors and etc
-                .then(|_| future::ok(()))
-            )
+            tokio::spawn(task.map_err(|_| ()))
         });
 
     tokio::run(done);
