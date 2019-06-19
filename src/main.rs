@@ -5,6 +5,9 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use futures::{try_ready, Future, Poll};
 use std::io;
 use lazy_static::*;
+use tokio::executor::current_thread::spawn;
+use tokio::runtime::current_thread::run;
+//use tokio::{run, spawn};
 
 const SINGLE_RESP: &[u8] = b"HTTP/1.1 200 OK\r\nConnection: Keep-Alive\r\nContent-Length: 17\r\n\r\n{\"success\":true}\n";
 lazy_static! {
@@ -23,10 +26,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (reader, writer) = socket.split();
             // Mapping the err to unit cause this task may be aborted
             // we do not care if it does
-            tokio::spawn(responder(reader, writer).map_err(|_| ()))
+            spawn(responder(reader, writer).map_err(|_| ()));
+            future::ok(())
         });
 
-    tokio::run(task);
+    run(task);
     Ok(())
 }
 
