@@ -4,9 +4,12 @@ use tokio::prelude::*;
 use tokio::io::{AsyncRead, AsyncWrite};
 use futures::{try_ready, Future, Poll};
 use std::io;
+use lazy_static::*;
 
 const SINGLE_RESP: &[u8] = b"HTTP/1.1 200 OK\r\nConnection: Keep-Alive\r\nContent-Length: 17\r\n\r\n{\"success\":true}\n";
-const RESPONSES: &[u8] = include_bytes!("./responses");
+lazy_static! {
+    static ref RESPONSES: Vec<u8> = std::iter::repeat(SINGLE_RESP).take(256).flatten().cloned().collect();
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
