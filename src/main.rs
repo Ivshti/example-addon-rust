@@ -38,9 +38,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // We use Options so we can free them
 #[derive(Debug)]
 pub struct PipelineResponder<R, W> {
-    reader: Option<R>,
+    reader: R,
+    writer: W,
     read_done: bool,
-    writer: Option<W>,
     buf: Box<[u8]>,
     counter: HttpReqCounter,
     pos: usize,
@@ -55,9 +55,9 @@ where
     W: AsyncWrite,
 {
     PipelineResponder {
-        reader: Some(reader),
+        reader,
+        writer,
         read_done: false,
-        writer: Some(writer),
         buf: Box::new([0; BUF_SIZE]),
         counter: HttpReqCounter::default(),
         cap: 0,
@@ -77,8 +77,7 @@ where
         loop {
             // similar to tokio::io::copy
             if self.pos == self.cap && !self.read_done {
-                let reader = self.reader.as_mut().unwrap();
-                let n = try_ready!(reader.poll_read(&mut self.buf));
+                let n = try_ready!(self.reader.poll_read(&mut self.buf));
                 if n == 0 {
                     self.read_done = true;
                 } else {
@@ -89,9 +88,8 @@ where
             }
 
             if self.pos < self.cap {
-                let writer = self.writer.as_mut().unwrap();
                 let to_write = std::cmp::min(RESPONSES.len(), self.cap - self.pos);
-                let i = try_ready!(writer.poll_write(&RESPONSES[0..to_write]));
+                let i = try_ready!(self.writer.poll_write(&RESPONSES[0..to_write]));
                 if i == 0 {
                     // This will cause the future to get stuck, so it's an error
                     return Err(io::Error::new(io::ErrorKind::WriteZero, "zero bytes written"));
@@ -101,10 +99,7 @@ where
             }
 
             if self.pos == self.cap && self.read_done {
-                // Unwraps are safe cause we construct with Some
-                try_ready!(self.writer.as_mut().unwrap().poll_flush());
-                let _ = self.reader.take().unwrap();
-                let _ = self.writer.take().unwrap();
+                try_ready!(self.writer.poll_flush());
                 return Ok(().into());
             }
         }
